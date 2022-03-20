@@ -74,8 +74,10 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   if(va >= MAXVA)
     panic("walk");
 
+//多级页表查找pte
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)];
+    //如果PTE_V设置为1,表示下一级页表存在,继续下一级查找
     if(*pte & PTE_V) {
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
@@ -158,6 +160,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("remap");
+    //加上权限标记
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
