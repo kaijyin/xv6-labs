@@ -74,7 +74,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   if(va >= MAXVA)
     panic("walk");
 
-//多级页表查找pte
+  //多级页表查找最终指向物理地址的pte
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)];
     //如果PTE_V设置为1,表示下一级页表存在,继续下一级查找
@@ -84,6 +84,8 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
         return 0;
       memset(pagetable, 0, PGSIZE);
+      //此时并没有设置R,W,X,U标记,只有物理页PTE才需要设置用户权限
+      //这里只是设置PTE是否invalid,也就是是否被分配
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
@@ -160,7 +162,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("remap");
-    //加上权限标记
+    //加上用户权限标记
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -241,6 +243,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   for(a = oldsz; a < newsz; a += PGSIZE){
     mem = kalloc();
     if(mem == 0){
+      //一页分配失败,则整个操作都取消,释放之前分配的内存
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -291,7 +294,6 @@ freewalk(pagetable_t pagetable)
   }
   kfree((void*)pagetable);
 }
-
 // Free user memory pages,
 // then free page-table pages.
 void
@@ -339,7 +341,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 }
 
 // mark a PTE invalid for user access.
-// used by exec for the user stack guard page.
+// used by exec for the user stack guard page.防止用户栈越界
 void
 uvmclear(pagetable_t pagetable, uint64 va)
 {
@@ -442,4 +444,26 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+void printvm(int level,pagetable_t pagetable){
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) ){
+      for(int j=0;j<level;j++){
+        printf("..");
+        if(j!=level-1){
+          printf(" ");
+        }
+      }
+      uint64 child = PTE2PA(pte);
+      printf("%d: pte %p pa %p\n",i,(uint64)pte,child);
+      if((pte & (PTE_R|PTE_W|PTE_X)) == 0)printvm(level+1,(pagetable_t)child);
+    }
+  }
+}
+void 
+vmprint(pagetable_t pagetable){
+     // there are 2^9 = 512 PTEs in a page table.
+  printf("page table %p\n",pagetable);
+  printvm(1,pagetable);
 }
