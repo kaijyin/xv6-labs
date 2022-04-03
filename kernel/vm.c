@@ -24,6 +24,8 @@ kvminit()
   kernel_pagetable = (pagetable_t) kalloc();
   memset(kernel_pagetable, 0, PGSIZE);
 
+  //直接映射,意思不是虚拟页表的值就是该位置的值,
+  //而是访问虚拟页表的地址就是物理地址,比如va=1 pa=1,访问的时候还是需要进行虚拟页表翻译,没有特权
   // uart registers
   kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
 

@@ -37,6 +37,7 @@ procinit(void)
       char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
+      //在内核页表中分配进程栈,并且设置gard page,并且设置p->kstack
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
@@ -122,6 +123,7 @@ found:
   }
 
   // Set up new context to start executing at forkret,
+  //设置return address为forkret,线程切换后自动设置pc为ra开始执行
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
@@ -151,6 +153,7 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
 }
+
 
 // Create a user page table for a given process,
 // with no user memory, but with trampoline pages.
@@ -517,6 +520,7 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+  //切换到schedlor进程,执行进程切换
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
@@ -542,14 +546,14 @@ forkret(void)
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
 
-  if (first) {
+  if (first) {//为第一个进程设置root权限
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot
     // be run from main().
     first = 0;
     fsinit(ROOTDEV);
   }
-
+  //新建的进程回到用户态,开始执行,期间会设置frame里的kernel字段
   usertrapret();
 }
 

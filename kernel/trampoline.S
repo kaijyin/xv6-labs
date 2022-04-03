@@ -20,7 +20,7 @@ uservec:
         # in supervisor mode, but with a
         # user page table.
         #
-        # sscratch points to where the process's p->trapframe is
+        # sscratch points to where the process's p->trapframe is指向trapframe
         # mapped into user space, at TRAPFRAME.
         #
         
@@ -73,7 +73,7 @@ uservec:
         # load the address of usertrap(), p->trapframe->kernel_trap
         ld t0, 16(a0)
 
-        # restore kernel page table from p->trapframe->kernel_satp
+        # restore kernel page table from p->trapframe->kernel_satp 设置内核态页表,并且刷新PTE
         ld t1, 0(a0)
         csrw satp, t1
         sfence.vma zero, zero
@@ -81,18 +81,18 @@ uservec:
         # a0 is no longer valid, since the kernel page
         # table does not specially map p->tf.
 
-        # jump to usertrap(), which does not return
+        # jump to usertrap(), which does not return 跳越进入到usertarp程序,开始处理中断,即设置pc=usertrap()
         jr t0
 
 .globl userret
 userret:
-        # userret(TRAPFRAME, pagetable)
+        # userret(TRAPFRAME, pagetable) 参数: trapframe和用户态pagetable
         # switch from kernel to user.
         # usertrapret() calls here.
         # a0: TRAPFRAME, in user page table.
         # a1: user page table, for satp.
 
-        # switch to the user page table.
+        # switch to the user page table.并且刷新PTE!
         csrw satp, a1
         sfence.vma zero, zero
 
@@ -136,6 +136,6 @@ userret:
 	# restore user a0, and save TRAPFRAME in sscratch
         csrrw a0, sscratch, a0
         
-        # return to user mode and user pc.
+        # return to user mode and user pc.回到user pc
         # usertrapret() set up sstatus and sepc.
         sret
