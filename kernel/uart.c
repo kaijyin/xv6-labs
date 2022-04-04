@@ -15,19 +15,19 @@
 // address of one of the registers.
 #define Reg(reg) ((volatile unsigned char *)(UART0 + reg))
 
-// the UART control registers.
+// the UART control registers.//键盘中断
 // some have different meanings for
 // read vs write.
 // see http://byterunner.com/16550.html
-#define RHR 0                 // receive holding register (for input bytes)
-#define THR 0                 // transmit holding register (for output bytes)
+#define RHR 0                 // receive holding register (for input bytes)接收数据的寄存器
+#define THR 0                 // transmit holding register (for output bytes)发送数据的寄存器
 #define IER 1                 // interrupt enable register
 #define IER_TX_ENABLE (1<<0)
 #define IER_RX_ENABLE (1<<1)
 #define FCR 2                 // FIFO control register
 #define FCR_FIFO_ENABLE (1<<0)
 #define FCR_FIFO_CLEAR (3<<1) // clear the content of the two FIFOs
-#define ISR 2                 // interrupt status register
+#define ISR 2                 // interrupt status register 
 #define LCR 3                 // line control register
 #define LCR_EIGHT_BITS (3<<0)
 #define LCR_BAUD_LATCH (1<<7) // special mode to set baud rate
@@ -95,7 +95,7 @@ uartputc(int c)
 
   while(1){
     if(((uart_tx_w + 1) % UART_TX_BUF_SIZE) == uart_tx_r){
-      // buffer is full.
+      // buffer is full.没有剩余空间,阻塞掉
       // wait for uartstart() to open up space in the buffer.
       sleep(&uart_tx_r, &uart_tx_lock);
     } else {
@@ -139,6 +139,7 @@ uartstart()
 {
   while(1){
     if(uart_tx_w == uart_tx_r){
+      //没有需要传送的数据,退出
       // transmit buffer is empty.
       return;
     }
@@ -146,7 +147,7 @@ uartstart()
     if((ReadReg(LSR) & LSR_TX_IDLE) == 0){
       // the UART transmit holding register is full,
       // so we cannot give it another byte.
-      // it will interrupt when it's ready for a new byte.
+      // it will interrupt when it's ready for a new byte.后续会通过中断再调用start发送剩余的数据
       return;
     }
     
@@ -165,7 +166,7 @@ uartstart()
 int
 uartgetc(void)
 {
-  if(ReadReg(LSR) & 0x01){
+  if(ReadReg(LSR) & 0x01){//LSR可读
     // input data is ready.
     return ReadReg(RHR);
   } else {
@@ -176,11 +177,12 @@ uartgetc(void)
 // handle a uart interrupt, raised because input has
 // arrived, or the uart is ready for more output, or
 // both. called from trap.c.
+//键盘中断,既可能是发送缓存有空间发送的中断,也可能是控制台输入的中断,xv6中两种中断调用一个函数来处理
 void
 uartintr(void)
 {
   // read and process incoming characters.
-  while(1){
+  while(1){//一个一个读取,一次只从RHR寄存器中取一个字节
     int c = uartgetc();
     if(c == -1)
       break;

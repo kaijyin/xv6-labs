@@ -136,6 +136,6 @@ userret:
 	# restore user a0, and save TRAPFRAME in sscratch
         csrrw a0, sscratch, a0
         
-        # return to user mode and user pc.回到user pc
+        # return to user mode and user pc.回到user pc(之前设置的sepc)
         # usertrapret() set up sstatus and sepc.
         sret

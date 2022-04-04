@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "param.h": "c"
+        "param.h": "c",
+        "limits": "cpp"
     }
 }

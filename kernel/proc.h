@@ -46,7 +46,7 @@ struct trapframe {//用户态中断
   /*   0 */ uint64 kernel_satp;   // kernel page table
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
   /*  16 */ uint64 kernel_trap;   // usertrap()//中断处理函数usertrap地址
-  /*  24 */ uint64 epc;           // saved user program counter //用户态最后调用时的pc
+  /*  24 */ uint64 epc;           // saved user program counter //用户态最后调用时的pc,sepc
   /*  32 */ uint64 kernel_hartid; // saved kernel tp 
   /*  40 */ uint64 ra;
   /*  48 */ uint64 sp;
