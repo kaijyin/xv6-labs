@@ -143,6 +143,7 @@ kerneltrap()
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
   
+  //检查进入中断前的状态
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
@@ -200,7 +201,7 @@ devintr()//设备中断
 
     // the PLIC allows each device to raise at most one
     // interrupt at a time; tell the PLIC the device is
-    // now allowed to interrupt again.重新打开该设备的中断请求
+    // now allowed to interrupt again.清空irq标志位,表示中断已经处理,重新打开该设备的中断请求
     if(irq)
       plic_complete(irq);
 
@@ -214,8 +215,8 @@ devintr()//设备中断
     }
     
     // acknowledge the software interrupt by clearing
-    // the SSIP bit in sip.
-    w_sip(r_sip() & ~2);
+    // the SSIP bit in sip.清零sip,表示时钟中断已经被处理了
+    w_sip(r_sip() & ~2); 
 
     return 2;
   } else {

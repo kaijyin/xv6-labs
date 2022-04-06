@@ -21,32 +21,10 @@ extern char trampoline[]; // trampoline.S
 void
 kvminit()
 {
-  kernel_pagetable = (pagetable_t) kalloc();
-  memset(kernel_pagetable, 0, PGSIZE);
-
-  //直接映射,意思不是虚拟页表的值就是该位置的值,
-  //而是访问虚拟页表的地址就是物理地址,比如va=1 pa=1,访问的时候还是需要进行虚拟页表翻译,没有特权
-  // uart registers
-  kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
-
-  // virtio mmio disk interface
-  kvmmap(VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
-
-  // CLINT
-  kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
-
-  // PLIC
-  kvmmap(PLIC, PLIC, 0x400000, PTE_R | PTE_W);
-
-  // map kernel text executable and read-only.
-  kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
-
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
-
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
-  kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  kernel_pagetable = kvmcreate();
+  panic("heiheihei\n");
+  vmprint(kernel_pagetable);
+  panic("heiheihei\n");
 }
 
 // Switch h/w page table register to the kernel's page table,
@@ -58,6 +36,60 @@ kvminithart()
   sfence_vma();
 }
 
+void
+kvmchange(pagetable_t kpagetable)
+{
+  w_satp(MAKE_SATP(kpagetable));
+  sfence_vma();
+}
+
+// 创建内核页表,并且初始化程序段等
+pagetable_t
+kvmcreate()
+{
+  pagetable_t kpagetable = (pagetable_t) kalloc();
+  if(kpagetable==0)return 0;
+  memset(kpagetable, 0, PGSIZE);
+   // uart registers
+  kvmmap(kpagetable,UART0,PGSIZE,UART0, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  kvmmap(kpagetable,VIRTIO0,PGSIZE,VIRTIO0, PTE_R | PTE_W);
+
+  // CLINT
+  kvmmap(kpagetable,CLINT,0x10000,CLINT, PTE_R | PTE_W);
+
+  // PLIC
+  kvmmap(kpagetable,PLIC, 0x400000,PLIC, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  kvmmap(kpagetable,KERNBASE,(uint64)etext-KERNBASE, KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  kvmmap(kpagetable,(uint64)etext,PHYSTOP-(uint64)etext,(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  kvmmap(kpagetable,TRAMPOLINE, PGSIZE,(uint64)trampoline, PTE_R | PTE_X);
+  return kpagetable;
+}
+
+void
+kvmfree(pagetable_t kpagetable){
+  uvmunmap(kpagetable,PGROUNDDOWN(UART0),1,0);
+  uvmunmap(kpagetable,PGROUNDDOWN(VIRTIO0),1,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN(CLINT),PGROUNDUP(0x10000)/PGSIZE,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN(PLIC),PGROUNDUP(0x400000)/PGSIZE,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN(KERNBASE),PGROUNDUP((uint64)etext-KERNBASE)/PGSIZE,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN((uint64)etext),PGROUNDUP(PHYSTOP-(uint64)etext)/PGSIZE,0);
+
+  uvmunmap(kpagetable,TRAMPOLINE,1,0);
+  freewalk(kpagetable);
+}
 // Return the address of the PTE in page table pagetable
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page-table pages.
@@ -118,13 +150,11 @@ walkaddr(pagetable_t pagetable, uint64 va)
 }
 
 // add a mapping to the kernel page table.
-// only used when booting.
-// does not flush TLB or enable paging.
 void
-kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
-{
-  if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
-    panic("kvmmap");
+kvmmap(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm){
+  if(mappages(pagetable,va,size,pa,perm)!=0){
+    panic("kvmap");
+  }
 }
 
 // translate a kernel virtual address to
@@ -139,10 +169,12 @@ kvmpa(uint64 va)
   uint64 pa;
   
   pte = walk(kernel_pagetable, va, 0);
+  // printf("abcdefg\n");
   if(pte == 0)
     panic("kvmpa");
+  // printf("abcd");
   if((*pte & PTE_V) == 0)
-    panic("kvmpa");
+    panic("kvmpa2");
   pa = PTE2PA(*pte);
   return pa+off;
 }
@@ -164,7 +196,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("remap");
-    //加上用户权限标记
+    //加上权限标记
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -197,10 +229,25 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
-    *pte = 0;
+    *pte = 0;//取消映射关系,啥都没有(清空)
   }
 }
 
+void
+kvmunmap(pagetable_t kpagetable){
+  uvmunmap(kpagetable,PGROUNDDOWN(UART0),1,0);
+  uvmunmap(kpagetable,PGROUNDDOWN(VIRTIO0),1,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN(CLINT),PGROUNDUP(0x10000)/PGSIZE,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN(PLIC),PGROUNDUP(0x400000)/PGSIZE,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN(KERNBASE),PGROUNDUP((uint64)etext-KERNBASE)/PGSIZE,0);
+
+  uvmunmap(kpagetable,PGROUNDDOWN((uint64)etext),PGROUNDUP(PHYSTOP-(uint64)etext)/PGSIZE,0);
+
+  uvmunmap(kpagetable,TRAMPOLINE,1,0);
+}
 // create an empty user page table.
 // returns 0 if out of memory.
 pagetable_t
@@ -302,7 +349,7 @@ void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
   if(sz > 0)
-    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
+    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);//用户额外申请的空间就需要dofree
   freewalk(pagetable);
 }
 

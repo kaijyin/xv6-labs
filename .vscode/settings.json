@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "param.h": "c",
-        "limits": "cpp"
+        "limits": "cpp",
+        "typeinfo": "c"
     }
 }

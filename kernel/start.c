@@ -7,7 +7,7 @@
 void main();
 void timerinit();
 
-// entry.S needs one stack per CPU.
+// entry.S needs one stack per CPU.为每个栈分配栈区,执行初始化和sheduler函数期间使用
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 
 // scratch area for timer interrupt, one per CPU.
