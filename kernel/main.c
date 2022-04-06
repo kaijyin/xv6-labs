@@ -39,7 +39,7 @@ main()
     sockinit();
 #endif    
     userinit();      // first user process
-    __sync_synchronize();
+    __sync_synchronize();//防止编译器优化指令执行顺序,导致死锁或者锁异常
     started = 1;
   } else {
     while(started == 0)
