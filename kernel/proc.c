@@ -102,15 +102,12 @@ found:
     return 0;
   }
 
-  p->kpagetable=kvmcreate();
-  printf("hello\n");
-  vmprint(p->kpagetable);
+  p->kpagetable=ukvmcreate();
   if(p->kpagetable == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
   }
-    panic("heihei");
   char *pa = kalloc();
   if (pa == 0){
     freeproc(p);
@@ -119,18 +116,12 @@ found:
   }
   //在内核页表中分配进程栈,就在开始位置吧,并且设置gard page,并且设置p->kstack
   uint64 va = KSTACK((int)(p - proc));
-  if(mappages(p->kpagetable,va, PGSIZE,(uint64)pa, PTE_R | PTE_W)<0){
-    kfree(pa);
-    freeproc(p);
-    release(&p->lock);
-    return 0;
-  }
+  ukvmmap(p->kpagetable,va,(uint64)pa,PGSIZE, PTE_R | PTE_W);
   p->kstack = va;
   
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
-    kfree(pa);
     freeproc(p);
     release(&p->lock);
     return 0;
@@ -142,7 +133,6 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-  
   return p;
 }
 
@@ -156,12 +146,13 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->kpagetable){
-    uvmunmap(p->kpagetable,p->kstack,1,1);
+    if(p->kstack!=0)uvmunmap(p->kpagetable,p->kstack,1,1);//解除映射,并释放物理内存
     kvmfree(p->kpagetable);
   }
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->kpagetable=0;
+  p->kstack=0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -211,7 +202,7 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz){
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-  //为什么不dofree trapframe,因为pro对象并没有被清除,后面还会用到,trapframe也只是做了个mmap
+  //为什么不dofree trapframe,因为pro对象
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
@@ -242,7 +233,7 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
-
+  kvmgrow(p->kpagetable,p->pagetable,0,p->sz);
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -271,6 +262,8 @@ growproc(int n)
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  kvmgrow(p->kpagetable,p->pagetable,p->sz,sz);
+  kvmchange(p->kpagetable);//页表更新,刷新TLB
   p->sz = sz;
   return 0;
 }
@@ -297,6 +290,7 @@ fork(void)
   }
   np->sz = p->sz;
 
+  kvmgrow(np->kpagetable,np->pagetable,0,np->sz);
   np->parent = p;
 
   // copy saved user registers.
@@ -490,16 +484,15 @@ scheduler(void)//每个核的循环函数,不停查询有没有准备好的proce
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // printf("sheed\n");
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        vmprint(p->kpagetable);
+        // vmprint(p->kpagetable);
         kvmchange(p->kpagetable);
         swtch(&c->context, &p->context);
-
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -567,7 +560,6 @@ forkret(void)
 
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
-
   if (first) {//为第一个进程设置root权限
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot
