@@ -92,7 +92,7 @@ userret:
         # a0: TRAPFRAME, in user page table.
         # a1: user page table, for satp.
 
-        # switch to the user page table.并且刷新PTE!
+        # switch to the user page table.回到用户态,设置用户页表,并且刷新TLB!
         csrw satp, a1
         sfence.vma zero, zero
 
