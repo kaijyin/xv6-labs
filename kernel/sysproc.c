@@ -49,6 +49,7 @@ sys_sbrk(void)
   struct proc*p=myproc();
   addr = p->sz;
   p->sz+=n;
+  //直接更新sz即可,如果是缩小内存,需要把多余的物理内存映射给取消掉.
   if(n<0){
     uvmunmap(p->pagetable,PGROUNDUP(p->sz),(PGROUNDUP(addr)-PGROUNDUP(p->sz))/PGSIZE,1);
   }

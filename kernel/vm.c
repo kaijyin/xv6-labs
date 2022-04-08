@@ -180,6 +180,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    //没有分配不算错,直接跳过就行
     if((pte = walk(pagetable, a, 0)) == 0)continue;
     if((*pte & PTE_V) == 0)continue;
     if(PTE_FLAGS(*pte) == PTE_V)
@@ -313,6 +314,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
+    //没有分配不算错,直接跳过就行
     if((pte = walk(old, i, 0)) == 0)continue;
     if((*pte & PTE_V) == 0)continue;
     pa = PTE2PA(*pte);
