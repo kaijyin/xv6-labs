@@ -71,7 +71,8 @@ usertrap(void)
     //为page fault定位,为va对应的页面映射物理内存.
     if(r_scause() == 13||r_scause()==15){
         uint64 va=r_stval();
-        if(p->sz>=va&&uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)!=0){
+        // printf("basestack:%d va:%p\n", p->stackbase,va);
+        if(p->sz>=va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)!=0){
            goto ahead;
         }
     }

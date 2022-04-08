@@ -71,11 +71,17 @@ sys_read(void)
 {
   struct file *f;
   int n;
-  uint64 p;
+  uint64 va;
 
-  if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
+  if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &va) < 0)
     return -1;
-  return fileread(f, p, n);
+  struct proc*p=myproc();
+  if(p->sz>=va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&walkaddr(p->pagetable,va)==0){
+    if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)==0){
+       panic("uvmalloc");
+    }
+  }
+  return fileread(f, va, n);
 }
 
 uint64
@@ -83,12 +89,17 @@ sys_write(void)
 {
   struct file *f;
   int n;
-  uint64 p;
+  uint64 va;
 
-  if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
+  if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &va) < 0)
     return -1;
-
-  return filewrite(f, p, n);
+  struct proc*p=myproc();
+  if(p->sz>=va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&walkaddr(p->pagetable,va)==0){
+    if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)==0){
+       panic("uvmalloc");
+    }
+  }
+  return filewrite(f, va, n);
 }
 
 uint64
@@ -464,8 +475,16 @@ sys_pipe(void)
 
   if(argaddr(0, &fdarray) < 0)
     return -1;
+  uint64 va=fdarray;
+  if(p->sz>=va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&walkaddr(p->pagetable,va)==0){
+    if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)==0){
+       panic("uvmalloc");
+    }
+  }
   if(pipealloc(&rf, &wf) < 0)
     return -1;
+  
+
   fd0 = -1;
   if((fd0 = fdalloc(rf)) < 0 || (fd1 = fdalloc(wf)) < 0){
     if(fd0 >= 0)
