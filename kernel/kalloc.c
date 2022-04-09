@@ -81,8 +81,10 @@ kalloc(void)
   r = kmem.freelist;
   if(r){
     kmem.freelist = r->next;
+    add_refnum((uint64)r);//刚拿出来就不需要加锁
   }
-  add_refnum((uint64)r);//刚拿出来就不需要加锁
+  // add_refnum((uint64)r);//刚拿出来就不需要加锁
+    //要r存在才设,究极细节,没有页面则不能+1,因为这样+1,可能是另外一个有效地址的页,然而人家并没有分配,就错了!
   release(&kmem.lock);
   if(r)memset((char*)r, 5, PGSIZE);// fill with junk
   return (void*)r;

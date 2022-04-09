@@ -361,6 +361,9 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va = PGROUNDDOWN(dstva);
+    if(va>=MAXVA){
+      return -1;
+    }
     pte = walk(pagetable,va,0);
     if(pte == 0||(*pte & PTE_V) == 0||(*pte & PTE_U) == 0)return -1;
     lock_kalloc();//加上全局锁,读取和更新PTE_COW和PTE_W 需要同步

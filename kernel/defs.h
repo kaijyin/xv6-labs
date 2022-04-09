@@ -68,7 +68,6 @@ void            add_refnum(uint64);
 void            deal_refnum(uint64);
 void            lock_kalloc();
 void            unlock_kalloc();
-void*           kalloc_withlock();
 // log.c
 void            initlog(int, struct superblock*);
 void            log_write(struct buf*);
