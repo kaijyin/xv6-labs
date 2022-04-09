@@ -20,6 +20,7 @@ struct run {
 
 struct {
   struct spinlock lock;
+  struct spinlock ref_lock;
   struct run *freelist;
 } kmem;
 
@@ -27,9 +28,10 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&kmem.ref_lock,"kmem_ref");
   freerange(end, (void*)PHYSTOP);
 }
-
+uint8 refnums[(PHYSTOP-KERNBASE)/PGSIZE];
 void
 freerange(void *pa_start, void *pa_end)
 {
@@ -51,14 +53,19 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
-  // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
-
-  r = (struct run*)pa;
-
+  int pos=((uint64)pa-KERNBASE)/PGSIZE;
+  acquire(&kmem.ref_lock);
+  if(refnums[pos]>=1)refnums[pos]--;
+  int num=refnums[pos];
+  release(&kmem.ref_lock);
   acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
+  if(num==0){
+    // Fill with junk to catch dangling refs.
+    memset(pa, 1, PGSIZE);
+    r = (struct run*)pa;
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+  } 
   release(&kmem.lock);
 }
 
@@ -72,11 +79,27 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+  }
+  add_refnum((uint64)r);//刚拿出来就不需要加锁
   release(&kmem.lock);
-
-  if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
+  if(r)memset((char*)r, 5, PGSIZE);// fill with junk
   return (void*)r;
+}
+
+void lock_kalloc(){
+   acquire(&kmem.ref_lock);
+}
+void unlock_kalloc(){
+  release(&kmem.ref_lock);
+}
+uint8 refnum(uint64 pa){
+  return refnums[(pa-KERNBASE)/PGSIZE];
+}
+void add_refnum(uint64 pa){
+   refnums[(pa-KERNBASE)/PGSIZE]++;
+}
+void deal_refnum(uint64 pa){
+   refnums[(pa-KERNBASE)/PGSIZE]--;
 }

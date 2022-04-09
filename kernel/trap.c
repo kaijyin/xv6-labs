@@ -68,11 +68,38 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+    uint64 va=r_stval();
+    if((r_scause()==13||r_scause()==15)&&va<=p->sz){
+    pte_t *pte=walk(p->pagetable,va,0);
+    if(pte != 0&&(*pte & PTE_V) != 0&&(*pte & PTE_U) != 0){
+    lock_kalloc();//加上全局锁,读取和更新 PTE_W和PTE_COW需要同步
+    uint flags=PTE_FLAGS(*pte);
+    uint64 pa=PTE2PA(*pte);
+    if(flags&PTE_COW){//如果是因为写导致的缺页
+       flags&=~PTE_COW;
+       flags|=PTE_W;
+       if(refnum(pa)==1){//如果该物理页只有一个引用,说明就他在使用,加上写标志即可
+         *pte=PA2PTE(pa)|flags;
+          unlock_kalloc();
+         goto ahead;
+       }
+       uint64 newpa;
+       if((newpa=(uint64)kalloc())!=0){
+         deal_refnum(pa);
+         *pte=PA2PTE(newpa)|flags;
+         unlock_kalloc();
+         memmove((void*)newpa,(void*)pa,PGSIZE);
+         goto ahead;
+       }
+    }
+    unlock_kalloc();
+    }}
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
 
+ahead:
   if(p->killed)
     exit(-1);
 

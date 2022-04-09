@@ -277,7 +277,7 @@ freewalk(pagetable_t pagetable)
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
-    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X|PTE_COW)) == 0){
       // this PTE points to a lower-level page table.
       uint64 child = PTE2PA(pte);
       freewalk((pagetable_t)child);
@@ -311,22 +311,24 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
-
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+    lock_kalloc();
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    flags&=~(PTE_W);
+    flags|=(PTE_COW);
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      unlock_kalloc();
       goto err;
     }
+    *pte&=~(PTE_W);
+    *pte|=(PTE_COW);
+    add_refnum(pa);
+    unlock_kalloc();
   }
   return 0;
 
@@ -354,21 +356,50 @@ uvmclear(pagetable_t pagetable, uint64 va)
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
-  uint64 n, va0, pa0;
+  uint64 n, va, pa;
+  pte_t*pte;
 
   while(len > 0){
-    va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
-    n = PGSIZE - (dstva - va0);
+    va = PGROUNDDOWN(dstva);
+    pte = walk(pagetable,va,0);
+    if(pte == 0||(*pte & PTE_V) == 0||(*pte & PTE_U) == 0)return -1;
+    lock_kalloc();//加上全局锁,读取和更新PTE_COW和PTE_W 需要同步
+    uint flags=PTE_FLAGS(*pte);
+    pa=PTE2PA(*pte);
+    if(flags&PTE_COW){//如果是COW,需要新建
+       flags&=~PTE_COW;
+       flags|=PTE_W;
+       if(refnum(pa)==1){//如果该物理页只有一个引用,说明就他在使用,加上写标志即可
+         *pte=PA2PTE(pa)|flags;
+         unlock_kalloc();
+         goto ahead;
+       }
+       uint64 newpa;
+       if((newpa=(uint64)kalloc())!=0){
+        //  printf("now\n");
+         deal_refnum(pa);
+         *pte=PA2PTE(newpa)|flags;
+         unlock_kalloc();
+         memmove((void*)newpa,(void*)pa,PGSIZE);
+         pa=newpa;
+         goto ahead;
+       }
+       unlock_kalloc();
+       return -1;
+    }
+    unlock_kalloc();
+ahead:
+
+    // printf("here it is\n");
+    n = PGSIZE - (dstva - va);
     if(n > len)
       n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
+    
+    memmove((void *)(pa + (dstva - va)), src, n);
 
     len -= n;
     src += n;
-    dstva = va0 + PGSIZE;
+    dstva = va + PGSIZE;
   }
   return 0;
 }
