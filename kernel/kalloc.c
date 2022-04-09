@@ -21,12 +21,17 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
-
+  int numpage;
+} kmem[NCPU];
+char name[NCPU][10];
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  for(int i=0;i<NCPU;i++){
+    snprintf(name[i],10,"mem_%d",i);
+    initlock(&kmem[i].lock,name[i]);
+    kmem[i].numpage=0;
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -55,11 +60,12 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  int id=cpuid();
+  acquire(&kmem[id].lock);
+  kmem[id].numpage++;
+  r->next = kmem[id].freelist;
+  kmem[id].freelist = r;
+  release(&kmem[id].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -70,12 +76,44 @@ kalloc(void)
 {
   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
-
+  int id=cpuid();
+  acquire(&kmem[id].lock);
+  r = kmem[id].freelist;
+  if(r){
+     kmem[id].freelist = r->next;
+     kmem[id].numpage--;
+     release(&kmem[id].lock);
+  }else {
+     release(&kmem[id].lock);
+     int nid=id+1,steal=0;
+     struct run*head=0,*tail=0;
+     for(int k=1;k<NCPU;k++){//问其他的CPU要页面
+         if(nid==NCPU)nid=0;
+         acquire(&kmem[nid].lock);
+         if(kmem[nid].numpage>0){
+            steal=(kmem[nid].numpage+1)/2;
+            kmem[nid].numpage-=steal;
+            head=tail=kmem[nid].freelist;
+            for(int i=1;i<steal;i++){
+              tail=tail->next;
+            }
+            kmem[nid].freelist=tail->next;
+            tail->next=0;
+            release(&kmem[nid].lock);
+            break;
+         }
+         release(&kmem[nid].lock);
+         nid++;
+       }
+       if(steal){
+           acquire(&kmem[id].lock);
+           kmem[id].numpage+=steal-1;
+           tail->next=kmem[id].freelist;
+           kmem[id].freelist = head->next;
+           r=head;
+           release(&kmem[id].lock);
+      }
+  }
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
