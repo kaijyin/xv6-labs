@@ -152,7 +152,7 @@ end_op(void)
   log.outstanding -= 1;
   if(log.committing)
     panic("log.committing");
-  if(log.outstanding == 0){
+  if(log.outstanding == 0){//目前没有其他文件操作
     do_commit = 1;
     log.committing = 1;
   } else {
@@ -190,6 +190,7 @@ write_log(void)
   }
 }
 
+//先写进日志磁盘区,再拷贝回原本的区域
 static void
 commit()
 {
@@ -198,7 +199,7 @@ commit()
     write_head();    // Write header to disk -- the real commit
     install_trans(0); // Now install writes to home locations
     log.lh.n = 0;
-    write_head();    // Erase the transaction from the log
+    write_head();    // Erase the transaction from the log 设置日志缓冲区为0,落盘后即确认日志提交,重启时无需再写入
   }
 }
 
