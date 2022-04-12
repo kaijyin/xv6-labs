@@ -294,7 +294,6 @@ sys_open(void)
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
-
   begin_op();
 
   if(omode & O_CREATE){
@@ -304,16 +303,38 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
-    }
-    ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
-      iunlockput(ip);
-      end_op();
-      return -1;
-    }
+      if((ip = namei(path)) == 0){
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      int count=10;
+      char path[MAXPATH];
+      while(ip->type==T_SYMLINK&&(omode&O_NOFOLLOW)==0&&count>0){
+        if(readi(ip,0,(uint64)path,0,MAXPATH)<0){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip);
+        ip=namei(path);
+        if(ip==0){
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+        count--;
+      }
+      if(ip->type==T_SYMLINK&&(omode&O_NOFOLLOW)==0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      if(ip->type == T_DIR && omode != O_RDONLY){
+       iunlockput(ip);
+       end_op();
+       return -1;
+     }
   }
 
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
@@ -321,7 +342,7 @@ sys_open(void)
     end_op();
     return -1;
   }
-
+  
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -329,6 +350,7 @@ sys_open(void)
     end_op();
     return -1;
   }
+
 
   if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
@@ -482,5 +504,23 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+uint64 
+sys_symlink(void){
+  struct inode *ip;
+  char tar_path[MAXPATH],path[MAXPATH];
+  begin_op();
+  if(argstr(0, tar_path, MAXPATH)<0||argstr(1,path,MAXPATH)<0||(ip=create(path,T_SYMLINK,0,0))==0){
+    end_op();
+    return -1;
+  }
+  if(writei(ip,0,(uint64)tar_path,0,MAXPATH)<0){
+      iunlockput(ip);
+      end_op();
+      return -1;
+  }
+  iunlockput(ip);
+  end_op();
   return 0;
 }
