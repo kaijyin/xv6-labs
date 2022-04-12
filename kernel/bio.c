@@ -26,7 +26,6 @@
 struct {
   struct spinlock buk_lock[NBUK];
   struct buf head[NBUK];
-  int freenum[NBUK];
   struct buf buf[NBUF];
 } bcache;
 
@@ -49,7 +48,6 @@ binit(void)
     initsleeplock(&b->lock, "buffer");
     bcache.head[i].next->prev = b;
     bcache.head[i].next = b;
-    bcache.freenum[i]++;
   }
   }
   for(;b<bcache.buf+NBUF;b++){
@@ -57,7 +55,6 @@ binit(void)
      b->prev = &bcache.head[0];
      bcache.head[0].next->prev = b;
      bcache.head[0].next = b;
-     bcache.freenum[0]++;
   }
 }
 
@@ -85,11 +82,7 @@ bget(uint dev, uint blockno)
   int next_buck=buk_idx;
   for(int i=0;i<NBUK;i++,next_buck++){
     if(next_buck==NBUK)next_buck=0;
-     acquire(&bcache.buk_lock[next_buck]);
-     if(bcache.freenum[next_buck]==0){
-       release(&bcache.buk_lock[next_buck]);
-       continue;
-     }
+    acquire(&bcache.buk_lock[next_buck]);
     int find=0;
     for(b = bcache.head[next_buck].prev; b != &bcache.head[next_buck]; b = b->prev){
        if(b->refcnt == 0) {
@@ -99,8 +92,6 @@ bget(uint dev, uint blockno)
       b->refcnt = 1;
       b->next->prev = b->prev;
       b->prev->next = b->next;
-      bcache.freenum[next_buck]--;
-      // printf("buck: %d freenum:%d\n",next_buck,bcache.freenum[next_buck]);
       find=1;
       break;
       } 
@@ -116,7 +107,6 @@ bget(uint dev, uint blockno)
         acquiresleep(&b->lock);
         return b;
     }
-    // panic("bget: freenum error");
   }
   panic("bget: no buffers");
 }
@@ -157,7 +147,6 @@ brelse(struct buf *b)
   acquire(&bcache.buk_lock[buk_idx]);
   b->refcnt--;
   if (b->refcnt == 0) {
-    bcache.freenum[buk_idx]++;
     b->next->prev = b->prev;
     b->prev->next = b->next;
     b->next = bcache.head[buk_idx].next;
@@ -172,9 +161,6 @@ void
 bpin(struct buf *b) {
   int buk_idx=b->blockno%NBUK;
   acquire(&bcache.buk_lock[buk_idx]);
-  if(b->refcnt==0){
-    bcache.freenum[buk_idx]--;
-  }
   b->refcnt++;
   release(&bcache.buk_lock[buk_idx]);
 }
@@ -184,9 +170,6 @@ bunpin(struct buf *b) {
   int buk_idx=b->blockno%NBUK;
   acquire(&bcache.buk_lock[buk_idx]);
   b->refcnt--;
-  if(b->refcnt==0){
-    bcache.freenum[buk_idx]++;
-  }
   release(&bcache.buk_lock[buk_idx]);
 }
 
