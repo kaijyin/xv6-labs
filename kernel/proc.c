@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -127,7 +131,7 @@ found:
     release(&p->lock);
     return 0;
   }
-
+  p->topva=TRAPFRAME;
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -294,6 +298,12 @@ fork(void)
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
+  for(i=0;i<NVMA;i++){
+     if(p->vmas[i].valid){
+       np->vmas[i]=p->vmas[i];
+       filedup(np->vmas[i].f);
+     }
+  }
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
@@ -351,6 +361,19 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
+  }
+  for(int i = 0; i < NVMA; i++){
+    if(p->vmas[i].valid){
+       uint64 sva=p->vmas[i].vstart;
+       int len=p->vmas[i].length;
+       if(p->vmas[i].flags&MAP_SHARED){
+         write_inode(p->vmas[i].f->ip,sva,sva+p->vmas[i].offset,len);
+       }
+       uvmunmap(p->pagetable,PGROUNDDOWN(sva),PGROUNDUP(len)/PGSIZE,1);
+       p->vmas[i].length=0;
+       p->vmas[i].valid=0;
+       fileclose(p->vmas[i].f);
+     }
   }
 
   begin_op();

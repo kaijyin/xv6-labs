@@ -476,6 +476,31 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
   return tot;
 }
 
+int 
+write_inode(struct inode *ip,uint64 addr,int off,int n){
+    int r=0;
+    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+    int i = 0;
+    while(i < n){
+      int n1 = n - i;
+      if(n1 > max)
+        n1 = max;
+
+      begin_op();
+      ilock(ip);
+      if ((r = writei(ip,1, addr + i, off, n1)) > 0)
+        off += r;
+      iunlock(ip);
+      end_op();
+
+      if(r != n1){
+        // error from writei
+        break;
+      }
+      i += r;
+    }
+    return (i == n ? n : -1);
+}
 // Write data to inode.
 // Caller must hold ip->lock.
 // If user_src==1, then src is a user virtual address;

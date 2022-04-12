@@ -484,3 +484,73 @@ sys_pipe(void)
   }
   return 0;
 }
+uint64 
+sys_mmap(void){
+   int len,prot,flags,fd,offset;
+   struct file*f;
+   if(argint(1,&len)<0||argint(2,&prot)<0||argint(3,&flags)<0||
+   argfd(4,&fd,&f)<0||argint(5,&offset)<0){
+       return 0xffffffffffffffff;
+   }
+   if(((flags&MAP_PRIVATE)==0)&&(((prot&PROT_WRITE)&&!f->writable)||((prot&(PROT_READ|PROT_EXEC))&&!f->readable))){//权限与文件打开方式不匹配
+      return 0xffffffffffffffff;
+   }
+   int perm=PTE_U;
+   if(prot&PROT_WRITE){
+     perm|=PTE_W;
+   }
+   if(prot&PROT_READ){
+     perm|=PTE_R;
+   }
+   if(prot&PROT_EXEC){
+     perm|=PTE_X;
+   }
+   struct proc*p=myproc();
+   for(int i=0;i<NVMA;i++){
+     if(p->vmas[i].valid==0){
+       p->vmas[i].valid=1;
+       p->vmas[i].length=len;
+       p->vmas[i].perm=perm;
+       p->vmas[i].flags=flags;
+       p->vmas[i].f=filedup(f);
+       p->vmas[i].offset=offset;
+       p->vmas[i].length=len;
+       p->topva-=PGROUNDUP(len);
+       p->vmas[i].vstart=p->topva;
+       return p->topva;
+     }
+   }
+   return 0xffffffffffffffff;
+}
+
+uint64 
+sys_munmap(void){
+  uint64 va;
+  int len;
+  if(argaddr(0,&va)<0||argint(1,&len)<0){
+    return -1;
+  }
+  struct proc*p=myproc();
+  for(int i=0;i<NVMA;i++){
+    uint64 sva=p->vmas[i].vstart;
+    uint64 vend=p->vmas[i].vstart+p->vmas[i].length;
+    if(p->vmas[i].valid&&va>=sva&&va<vend){
+       if(p->vmas[i].flags&MAP_SHARED){
+         write_inode(p->vmas[i].f->ip,sva,va-sva+p->vmas[i].offset,len);
+       }
+       uvmunmap(p->pagetable,PGROUNDDOWN(va),PGROUNDUP(len)/PGSIZE,1);
+       p->vmas[i].length-=len;
+       if(sva==va){
+         p->vmas[i].vstart+=len;
+         p->vmas[i].offset+=len;
+       }
+      //  printf("sva:%p len:%d\n",p->vmas[i].vstart,p->vmas[i].length);
+       if(p->vmas[i].length==0){
+         p->vmas[i].valid=0;
+         fileclose(p->vmas[i].f);
+       }
+       return 0;
+     }
+  }
+  return -1;
+}
