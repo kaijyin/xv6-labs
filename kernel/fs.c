@@ -400,6 +400,29 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn-=NINDIRECT;
+  if(bn < TNINDIRECT){
+    // Load indirect block, allocating if necessary.
+    uint tbn=bn/(NINDIRECT);
+    if((addr = ip->addrs[TNDIRECT]) == 0)
+      ip->addrs[TNDIRECT] = addr = balloc(ip->dev);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[tbn]) == 0){
+      a[tbn] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    bn=bn-tbn*(NINDIRECT);
+    bp=bread(ip->dev,addr);
+    a=(uint*)bp->data;
+    if((addr = a[bn]) == 0){
+      a[bn] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
 
   panic("bmap: out of range");
 }
@@ -431,7 +454,27 @@ itrunc(struct inode *ip)
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }
-
+  if(ip->addrs[TNDIRECT]){
+    // Load indirect block, allocating if necessary.
+    bp = bread(ip->dev,ip->addrs[TNDIRECT]);
+    a = (uint*)bp->data;
+    for(j=0;j<NINDIRECT;j++){
+      if(a[j]){
+         struct buf *tbp = bread(ip->dev,a[j]);
+         uint *ta = (uint*)tbp->data;
+         for(int k=0;k<NINDIRECT;k++){
+            if(ta[k]){
+              bfree(ip->dev,ta[k]);
+            }
+         }
+         brelse(tbp);
+         bfree(ip->dev, a[j]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[TNDIRECT]);
+    ip->addrs[TNDIRECT] = 0;
+  }
   ip->size = 0;
   iupdate(ip);
 }
@@ -455,6 +498,7 @@ stati(struct inode *ip, struct stat *st)
 int
 readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
+
   uint tot, m;
   struct buf *bp;
 
@@ -480,9 +524,6 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 // Caller must hold ip->lock.
 // If user_src==1, then src is a user virtual address;
 // otherwise, src is a kernel address.
-// Returns the number of bytes successfully written.
-// If the return value is less than the requested n,
-// there was an error of some kind.
 int
 writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
 {
@@ -499,21 +540,23 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
     m = min(n - tot, BSIZE - off%BSIZE);
     if(either_copyin(bp->data + (off % BSIZE), user_src, src, m) == -1) {
       brelse(bp);
+      n = -1;
       break;
     }
     log_write(bp);
     brelse(bp);
   }
 
-  if(off > ip->size)
-    ip->size = off;
+  if(n > 0){
+    if(off > ip->size)
+      ip->size = off;
+    // write the i-node back to disk even if the size didn't change
+    // because the loop above might have called bmap() and added a new
+    // block to ip->addrs[].
+    iupdate(ip);
+  }
 
-  // write the i-node back to disk even if the size didn't change
-  // because the loop above might have called bmap() and added a new
-  // block to ip->addrs[].
-  iupdate(ip);
-
-  return tot;
+  return n;
 }
 
 // Directories
