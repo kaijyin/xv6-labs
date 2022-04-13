@@ -39,7 +39,7 @@ ping(uint16 sport, uint16 dport, int attempts)
     fprintf(2, "ping: recv() failed\n");
     exit(1);
   }
-
+  printf("receve\n");
   close(fd);
   ibuf[cc] = '\0';
   if(strcmp(ibuf, "this is the host!") != 0){
