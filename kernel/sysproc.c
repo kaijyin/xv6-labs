@@ -45,22 +45,23 @@ sys_wait(void)
 uint64
 sys_sbrk(void)
 {
-  int addr;
+  int old_sz;
   int n;
 
   if(argint(0, &n) < 0)
     return -1;
   struct proc*p=myproc();
-  addr = p->sz;
-  if(p->sz+n>=PLIC){
+  old_sz = p->sz;
+  if(PGROUNDUP(p->sz+n)>=PLIC){
      return -1;
   }
   p->sz+=n;
   //直接更新sz即可,如果是缩小内存,需要把多余的物理内存映射给取消掉.
   if(n<0){
-    uvmunmap(p->pagetable,PGROUNDUP(p->sz),(PGROUNDUP(addr)-PGROUNDUP(p->sz))/PGSIZE,1);
+    kvmgrow(p->kpagetable,p->pagetable,PGROUNDUP(old_sz),PGROUNDUP(p->sz));
+    uvmdealloc(p->pagetable,PGROUNDUP(old_sz),PGROUNDDOWN(p->sz));
   }
-  return addr;
+  return old_sz;
 }
 
 uint64

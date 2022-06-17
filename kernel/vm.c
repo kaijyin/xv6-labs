@@ -269,19 +269,17 @@ void kvmgrow(pagetable_t kpagetable ,pagetable_t pagetable,uint64 oldsz,uint64 n
   uint64 i;
 
   for(i = oldsz; i < newsz; i += PGSIZE){
-    if((pte = walk(pagetable, i, 0)) == 0)
-      panic("kvmgrow: pte should exist");
+    if((pte = walk(pagetable, i, 0)) == 0)continue;//用户页表没映射(lazy),跳过
+
     if((kpte = walk(kpagetable, i, 1)) == 0)
-      panic("kvmgrow: pte should exist");
+      panic("kvmgrow: pte alloc fail");
     *kpte=*pte;
     *kpte&=~(PTE_U|PTE_W|PTE_X);
   }
   for(i=newsz;i<oldsz;i+=PGSIZE){
-    if((kpte = walk(kpagetable, i, 0)) == 0)
-      panic("kvmgrow: pte should exist");
+    if((kpte = walk(kpagetable, i, 0)) == 0)continue;//lazy的skip
     *kpte=0;
   }
-
 }
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
@@ -302,6 +300,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     mem = kalloc();
     if(mem == 0){
       //一页分配失败,则整个操作都取消,释放之前分配的内存
+      printf("here42424244\n");
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -309,6 +308,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz);
+      printf("here22323\n");
       return 0;
     }
   }
@@ -341,7 +341,7 @@ freewalk(pagetable_t pagetable)
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
-    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+    if((pte & PTE_V) && ((pte & (PTE_R|PTE_W|PTE_X)) == 0)){
       // this PTE points to a lower-level page table.
       uint64 child = PTE2PA(pte);
       freewalk((pagetable_t)child);
@@ -357,8 +357,8 @@ freewalk(pagetable_t pagetable)
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
-  if(sz > 0)
-    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);//用户额外申请的空间就需要dofree
+  printf("sz %d\n",sz);
+  uvmdealloc(pagetable,sz,0);//用户额外申请的空间就需要dofree
   freewalk(pagetable);
 }
 

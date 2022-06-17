@@ -8,7 +8,7 @@
 #include "kernel/memlayout.h"
 #include "kernel/riscv.h"
 
-#define REGION_SZ (1024 * 1024 * 1024)
+#define REGION_SZ (10 * 1024 * 1024)
 
 void
 sparse_memory(char *s)
@@ -81,7 +81,7 @@ oom(char *s)
 
   if((pid = fork()) == 0){
     m1 = 0;
-    while((m2 = malloc(4096*4096)) != 0){
+    while((m2 = malloc(4096)) != 0){
       *(char**)m2 = m1;
       m1 = m2;
     }
@@ -125,7 +125,7 @@ main(int argc, char *argv[])
   if(argc > 1) {
     n = argv[1];
   }
-  
+
   struct test {
     void (*f)(char *);
     char *s;
@@ -135,7 +135,7 @@ main(int argc, char *argv[])
     { oom, "out of memory"},
     { 0, 0},
   };
-    
+   
   printf("lazytests starting\n");
 
   int fail = 0;
