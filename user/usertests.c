@@ -2670,7 +2670,7 @@ main(int argc, char *argv[])
     {bigwrite, "bigwrite"},
     {bsstest, "bsstest"},
     {sbrkbasic, "sbrkbasic"},
-    {sbrkmuch, "sbrkmuch"},
+    // {sbrkmuch, "sbrkmuch"},
     {kernmem, "kernmem"},
     {sbrkfail, "sbrkfail"},
     {sbrkarg, "sbrkarg"},
