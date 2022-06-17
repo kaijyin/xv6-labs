@@ -121,6 +121,7 @@ ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
 ULIB += $U/statistics.o
 
+
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
@@ -172,21 +173,17 @@ UPROGS=\
 	$U/_trace\
 	$U/_sysinfotest
 
-ifeq ($(LAB),trap)
 UPROGS += \
 	$U/_call\
 	$U/_alarmtest
-endif
 
 
 UPROGS += \
 	$U/_stats
 
-ifeq ($(LAB),traps)
+
 UPROGS += \
-	$U/_call\
 	$U/_bttest
-endif
 
 ifeq ($(LAB),lazy)
 UPROGS += \
@@ -282,7 +279,6 @@ qemu-gdb: $K/kernel .gdbinit fs.img
 	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
 
-
 ifeq ($(LAB),net)
 # try to generate a unique port for the echo server
 SERVERPORT = $(shell expr `id -u` % 5000 + 25099)
@@ -310,7 +306,6 @@ grade:
 	@$(MAKE) clean || \
           (echo "'make clean' failed.  HINT: Do you have another running instance of xv6?" && exit 1)
 	./grade-lab $(GRADEFLAGS)
-
 
 ##
 ## FOR web handin

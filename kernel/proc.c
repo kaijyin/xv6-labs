@@ -114,6 +114,12 @@ found:
     release(&p->lock);
     return 0;
   }
+ // Allocate sigalarm trapframe page.
+  if((p->hander_trapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
   char *pa = kalloc();
   if (pa == 0){
     freeproc(p);
@@ -125,6 +131,9 @@ found:
   ukvmmap(p->kpagetable,va,(uint64)pa,PGSIZE, PTE_R | PTE_W);
   p->kstack = va;
   
+  p->tick=0;
+  p->hander_pc=0;
+  p->hander_working=0;
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if (p->pagetable == 0)
@@ -156,6 +165,12 @@ freeproc(struct proc *p)
     if(p->kstack!=0)uvmunmap(p->kpagetable,p->kstack,1,1);//解除映射,并释放物理内存
     kvmfree(p->kpagetable);
   }
+  if(p->hander_trapframe){
+    kfree((void*)p->hander_trapframe);
+  }
+  p->hander_trapframe=0;
+  p->tick=0;
+  p->hander_pc=0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->kpagetable=0;

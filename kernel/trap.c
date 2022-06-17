@@ -80,9 +80,15 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   //如果是时钟中断,在内核态下放弃cpu,等待下次调度,再回到用户态
-  if(which_dev == 2)
-    yield();
-
+  if(which_dev == 2){
+     p->lasttick++;
+     if(p->tick&&p->hander_working!=-1&&p->lasttick%p->tick==0){
+          memmove((void*)p->hander_trapframe,(void*)p->trapframe,PGSIZE);
+          p->trapframe->epc=p->hander_pc;
+          p->hander_working=-1;
+     }
+     yield();
+  }
   usertrapret();
 }
 

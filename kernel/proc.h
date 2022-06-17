@@ -3,7 +3,7 @@ struct context {
   uint64 ra;
   uint64 sp;
 
-  // callee-saved
+  // callee-saved //函数调用时会保存的寄存器,编译器使用
   uint64 s0;
   uint64 s1;
   uint64 s2;
@@ -96,6 +96,12 @@ struct proc {
   int pid;                     // Process ID
 
   // these are private to the process, so p->lock need not be held.
+  uint64 hander_pc;
+  int lasttick;
+  int tick;
+  int hander_working;
+  struct trapframe *hander_trapframe;
+
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
