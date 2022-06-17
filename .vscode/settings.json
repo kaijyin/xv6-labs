@@ -9,6 +9,10 @@
         "ostream": "c",
         "sstream": "c",
         "streambuf": "c",
-        "memory_resource": "c"
+        "memory_resource": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "utility": "c"
     }
 }
