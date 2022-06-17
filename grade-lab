@@ -181,54 +181,54 @@ def test_pteprint():
 #     # just a simple sanity check, will be graded manually
 #     check_answers("answers-pgtbl.txt")
 
-@test(5, "count copyin")
-def test_count():
-    r.run_qemu(shell_script([
-        'stats', 'stats'
-    ]), timeout=150)
-    matches = re.findall(r'^copyin: (\d+)', r.qemu.output, re.MULTILINE)
-    assert_equal(len(matches), 2)
-    assert_equal(int(matches[1]), int(matches[0]) + 28)
-    matches = re.findall(r'^copyinstr: (\d+)', r.qemu.output, re.MULTILINE)
-    assert_equal(len(matches), 2)
-    assert_equal(int(matches[1]), int(matches[0]) + 3)
+# @test(5, "count copyin")
+# def test_count():
+#     r.run_qemu(shell_script([
+#         'stats', 'stats'
+#     ]), timeout=150)
+#     matches = re.findall(r'^copyin: (\d+)', r.qemu.output, re.MULTILINE)
+#     assert_equal(len(matches), 2)
+#     assert_equal(int(matches[1]), int(matches[0]) + 28)
+#     matches = re.findall(r'^copyinstr: (\d+)', r.qemu.output, re.MULTILINE)
+#     assert_equal(len(matches), 2)
+#     assert_equal(int(matches[1]), int(matches[0]) + 3)
 
-@test(0, "usertests")
-def test_usertests():
-    r.run_qemu(shell_script([
-        'usertests'
-    ]), timeout=300)
+# @test(0, "usertests")
+# def test_usertests():
+#     r.run_qemu(shell_script([
+#         'usertests'
+#     ]), timeout=300)
 
-def usertest_check(testcase, nextcase, output):
-    if not re.search(r'\ntest {}: [\s\S]*OK\ntest {}'.format(testcase, nextcase), output):
-        raise AssertionError('Failed ' + testcase)
+# def usertest_check(testcase, nextcase, output):
+#     if not re.search(r'\ntest {}: [\s\S]*OK\ntest {}'.format(testcase, nextcase), output):
+#         raise AssertionError('Failed ' + testcase)
 
-@test(5, "usertests: copyin", parent=test_usertests)
-def test_copyin():
-    usertest_check("copyin", "copyout", r.qemu.output)
+# @test(5, "usertests: copyin", parent=test_usertests)
+# def test_copyin():
+#     usertest_check("copyin", "copyout", r.qemu.output)
 
-@test(5, "usertests: copyinstr1", parent=test_usertests)
-def test_copyin():
-    usertest_check("copyinstr1", "copyinstr2", r.qemu.output)
+# @test(5, "usertests: copyinstr1", parent=test_usertests)
+# def test_copyin():
+#     usertest_check("copyinstr1", "copyinstr2", r.qemu.output)
     
-@test(5, "usertests: copyinstr2",  parent=test_usertests)
-def test_copyinstr2():
-    usertest_check("copyinstr2", "copyinstr3", r.qemu.output)
+# @test(5, "usertests: copyinstr2",  parent=test_usertests)
+# def test_copyinstr2():
+#     usertest_check("copyinstr2", "copyinstr3", r.qemu.output)
 
-@test(5, "usertests: copyinstr3",  parent=test_usertests)
-def test_copyinstr3():
-    usertest_check("copyinstr3", "truncate1", r.qemu.output)
+# @test(5, "usertests: copyinstr3",  parent=test_usertests)
+# def test_copyinstr3():
+#     usertest_check("copyinstr3", "truncate1", r.qemu.output)
 
-@test(5, "usertests: sbrkmuch",  parent=test_usertests)
-def test_sbrkmuch():
-    usertest_check("sbrkmuch", "kernmem", r.qemu.output)
+# @test(5, "usertests: sbrkmuch",  parent=test_usertests)
+# def test_sbrkmuch():
+#     usertest_check("sbrkmuch", "kernmem", r.qemu.output)
 
-@test(20, "usertests: all tests", parent=test_usertests)
-def test_usertests():
-    r.match('^ALL TESTS PASSED$')
+# @test(20, "usertests: all tests", parent=test_usertests)
+# def test_usertests():
+#     r.match('^ALL TESTS PASSED$')
 
-@test(1, "time")
-def test_time():
-    check_time()
+# @test(1, "time")
+# def test_time():
+#     check_time()
 
 run_tests()
