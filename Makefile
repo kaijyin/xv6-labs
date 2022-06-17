@@ -3,7 +3,6 @@
 # (e.g., LB=util).  Run make grade to test solution with the lab's
 # grade script (e.g., grade-lab-util).
 
--include conf/lab.mk
 
 K=kernel
 U=user
@@ -68,12 +67,6 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb
-
-ifdef LAB
-LABUPPER = $(shell echo $(LAB) | tr a-z A-Z)
-CFLAGS += -DSOL_$(LABUPPER)
-endif
-
 CFLAGS += -MD
 CFLAGS += -mcmodel=medany
 CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
@@ -154,13 +147,8 @@ UPROGS=\
 	$U/_primes\
 	$U/_find\
 	$U/_xargs\
-
-
-ifeq ($(LAB),syscall)
-UPROGS += \
 	$U/_trace\
 	$U/_sysinfotest
-endif
 
 ifeq ($(LAB),trap)
 UPROGS += \

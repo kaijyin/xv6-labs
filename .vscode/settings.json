@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "cmath": "c",
+        "*.tcc": "c",
+        "exception": "c",
+        "fstream": "c",
+        "iosfwd": "c",
+        "new": "c",
+        "ostream": "c",
+        "sstream": "c",
+        "streambuf": "c",
+        "memory_resource": "c"
+    }
+}
