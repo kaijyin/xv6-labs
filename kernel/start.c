@@ -7,7 +7,8 @@
 void main();
 void timerinit();
 
-// entry.S needs one stack per CPU.
+// entry.S needs one stack per CPU.为每个栈分配栈区,执行初始化和sheduler函数期间使用
+//在设置了内核页表后,读写内核栈也是要翻译的,只不过由于是直接映射,所以和原本的执行看着没区别,并不冲突.
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 
 // scratch area for timer interrupt, one per CPU.

@@ -8,7 +8,8 @@
 .globl kernelvec
 .align 4
 kernelvec:
-        // make room to save registers.
+        // make room to save registers.,内核中断的话,数据就存在内核栈里
+        // 用户态中断的话数据就存在trapframe
         addi sp, sp, -256
 
         // save the registers.
@@ -44,10 +45,10 @@ kernelvec:
         sd t5, 232(sp)
         sd t6, 240(sp)
 
-	// call the C trap handler in trap.c
+	// call the C trap handler in trap.c 执行中断handler
         call kerneltrap
 
-        // restore registers.
+        // restore registers.中断结束,保存寄存器
         ld ra, 0(sp)
         ld sp, 8(sp)
         ld gp, 16(sp)

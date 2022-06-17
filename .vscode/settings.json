@@ -14,5 +14,13 @@
         "string_view": "c",
         "initializer_list": "c",
         "utility": "c"
+        "param.h": "c",
+        "limits": "cpp",
+        "typeinfo": "c",
+        "memlayout.h": "c",
+        "types.h": "c",
+        "fs.h": "c",
+        "defs.h": "c",
+        "spinlock.h": "c"
     }
 }

@@ -38,10 +38,12 @@ usertrap(void)
 {
   int which_dev = 0;
 
+  // 判断是否是用户态的中断/系统调用,即管理权限标志位SSP为0
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
   // send interrupts and exceptions to kerneltrap(),
+  //虽然设置了内核态页表,但是还是没有标识为内核态,需要发一个中断才正式进入内核态,也就是设置SSP
   // since we're now in the kernel.
   w_stvec((uint64)kernelvec);
 
@@ -50,7 +52,7 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
+  if(r_scause() == 8){//判断是那种中断,系统调用,还是设备中断(软件/硬件)
     // system call
 
     if(p->killed)
@@ -77,6 +79,7 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
+  //如果是时钟中断,在内核态下放弃cpu,等待下次调度,再回到用户态
   if(which_dev == 2)
     yield();
 
@@ -94,9 +97,11 @@ usertrapret(void)
   // we're about to switch the destination of traps from
   // kerneltrap() to usertrap(), so turn off interrupts until
   // we're back in user space, where usertrap() is correct.
+  //关闭中断,避免刚设置当前为用户态中断,就有个中断到了,但是此时我们还没设置好寄存器
   intr_off();
 
   // send syscalls, interrupts, and exceptions to trampoline.S
+  //设置当前为用户态了,中断的话就调用的是tarpoline.S
   w_stvec(TRAMPOLINE + (uservec - trampoline));
 
   // set up trapframe values that uservec will need when
@@ -124,7 +129,7 @@ usertrapret(void)
   // jump to trampoline.S at the top of memory, which 
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
-  uint64 fn = TRAMPOLINE + (userret - trampoline);
+  uint64 fn = TRAMPOLINE + (userret - trampoline);//找到userret函数位置,并调用,回到用户态
   ((void (*)(uint64,uint64))fn)(TRAPFRAME, satp);
 }
 
@@ -138,6 +143,7 @@ kerneltrap()
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
   
+  //检查进入中断前的状态
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
@@ -149,7 +155,7 @@ kerneltrap()
     panic("kerneltrap");
   }
 
-  // give up the CPU if this is a timer interrupt.
+  // give up the CPU if this is a timer 如果是时钟中断,执行调度
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
 
@@ -174,20 +180,20 @@ clockintr()
 // 1 if other device,
 // 0 if not recognized.
 int
-devintr()
+devintr()//设备中断
 {
   uint64 scause = r_scause();
 
   if((scause & 0x8000000000000000L) &&
-     (scause & 0xff) == 9){
+     (scause & 0xff) == 9){//外设中断
     // this is a supervisor external interrupt, via PLIC.
 
     // irq indicates which device interrupted.
     int irq = plic_claim();
 
-    if(irq == UART0_IRQ){
+    if(irq == UART0_IRQ){//键盘
       uartintr();
-    } else if(irq == VIRTIO0_IRQ){
+    } else if(irq == VIRTIO0_IRQ){//磁盘
       virtio_disk_intr();
     } else if(irq){
       printf("unexpected interrupt irq=%d\n", irq);
@@ -195,22 +201,22 @@ devintr()
 
     // the PLIC allows each device to raise at most one
     // interrupt at a time; tell the PLIC the device is
-    // now allowed to interrupt again.
+    // now allowed to interrupt again.清空irq标志位,表示中断已经处理,重新打开该设备的中断请求
     if(irq)
       plic_complete(irq);
 
     return 1;
-  } else if(scause == 0x8000000000000001L){
+  } else if(scause == 0x8000000000000001L){//定时器中断
     // software interrupt from a machine-mode timer interrupt,
     // forwarded by timervec in kernelvec.S.
 
-    if(cpuid() == 0){
+    if(cpuid() == 0){//只让一个核去做clock++的操作,不会有锁争用
       clockintr();
     }
     
     // acknowledge the software interrupt by clearing
-    // the SSIP bit in sip.
-    w_sip(r_sip() & ~2);
+    // the SSIP bit in sip.清零sip,表示时钟中断已经被处理了
+    w_sip(r_sip() & ~2); 
 
     return 2;
   } else {

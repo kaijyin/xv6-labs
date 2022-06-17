@@ -26,21 +26,9 @@ extern char trampoline[]; // trampoline.S
 void procinit(void)
 {
   struct proc *p;
-
   initlock(&pid_lock, "nextpid");
-  for (p = proc; p < &proc[NPROC]; p++)
-  {
-    initlock(&p->lock, "proc");
-
-    // Allocate a page for the process's kernel stack.
-    // Map it high in memory, followed by an invalid
-    // guard page.
-    char *pa = kalloc();
-    if (pa == 0)
-      panic("kalloc");
-    uint64 va = KSTACK((int)(p - proc));
-    kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-    p->kstack = va;
+  for(p = proc; p < &proc[NPROC]; p++) {
+      initlock(&p->lock, "proc");
   }
   kvminithart();
 }
@@ -120,6 +108,23 @@ found:
     return 0;
   }
 
+  p->kpagetable=ukvmcreate();
+  if(p->kpagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  char *pa = kalloc();
+  if (pa == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  //在内核页表中分配进程栈,就在开始位置吧,并且设置gard page,并且设置p->kstack
+  uint64 va = KSTACK((int)(p - proc));
+  ukvmmap(p->kpagetable,va,(uint64)pa,PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
+  
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if (p->pagetable == 0)
@@ -130,11 +135,11 @@ found:
   }
 
   // Set up new context to start executing at forkret,
+  //设置return address为forkret,等到线程切换后自动设置pc为ra开始执行
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
   return p;
 }
 
@@ -147,8 +152,14 @@ freeproc(struct proc *p)
   if (p->trapframe)
     kfree((void *)p->trapframe);
   p->trapframe = 0;
-  if (p->pagetable)
+  if(p->kpagetable){
+    if(p->kstack!=0)uvmunmap(p->kpagetable,p->kstack,1,1);//解除映射,并释放物理内存
+    kvmfree(p->kpagetable);
+  }
+  if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  p->kpagetable=0;
+  p->kstack=0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -197,12 +208,14 @@ proc_pagetable(struct proc *p)
 
 // Free a process's page table, and free the
 // physical memory it refers to.
-void proc_freepagetable(pagetable_t pagetable, uint64 sz)
-{
+void
+proc_freepagetable(pagetable_t pagetable, uint64 sz){
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+  //为什么不dofree trapframe,因为pro对象
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
+
 
 // a user program that calls exec("/init")
 // od -t xC initcode
@@ -227,7 +240,7 @@ void userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
-
+  kvmgrow(p->kpagetable,p->pagetable,0,p->sz);
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;     // user program counter
   p->trapframe->sp = PGSIZE; // user stack pointer
@@ -259,6 +272,8 @@ int growproc(int n)
   {
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  kvmgrow(p->kpagetable,p->pagetable,p->sz,sz);
+  kvmchange(p->kpagetable);//页表更新,刷新TLB
   p->sz = sz;
   return 0;
 }
@@ -286,6 +301,7 @@ int fork(void)
   }
   np->sz = p->sz;
 
+  kvmgrow(np->kpagetable,np->pagetable,0,np->sz);
   np->parent = p;
 
   // copy saved user registers.
@@ -474,7 +490,9 @@ int wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
-void scheduler(void)
+
+void
+scheduler(void)//每个核的循环函数,不停查询有没有准备好的process
 {
   struct proc *p;
   struct cpu *c = mycpu();
@@ -484,9 +502,9 @@ void scheduler(void)
   {
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    
     int found = 0;
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
+    for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if (p->state == RUNNABLE)
       {
@@ -495,8 +513,10 @@ void scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        // vmprint(p->kpagetable);
+        kvmchange(p->kpagetable);
         swtch(&c->context, &p->context);
-
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -505,11 +525,14 @@ void scheduler(void)
       }
       release(&p->lock);
     }
-    if (found == 0)
-    {
+#if !defined (LAB_FS)
+    if(found == 0) {
       intr_on();
       asm volatile("wfi");
     }
+#else
+    ;
+#endif
   }
 }
 
@@ -520,7 +543,8 @@ void scheduler(void)
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
-void sched(void)
+void
+sched(void)//执行调度程序,切换到sheduler进程,查找下一个runable进程来切换
 {
   int intena;
   struct proc *p = myproc();
@@ -535,6 +559,7 @@ void sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+  //切换到scheduler进程,执行进程切换
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
@@ -558,15 +583,14 @@ void forkret(void)
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
 
-  if (first)
-  {
+  if (first) {//为第一个进程设置root权限
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot
     // be run from main().
     first = 0;
     fsinit(ROOTDEV);
   }
-
+  //新建的进程回到用户态,开始执行,期间会设置frame里的kernel字段
   usertrapret();
 }
 

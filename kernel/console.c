@@ -89,7 +89,7 @@ consoleread(int user_dst, uint64 dst, int n)
   acquire(&cons.lock);
   while(n > 0){
     // wait until interrupt handler has put some
-    // input into cons.buffer.
+    // input into cons.buffer.如果没有数据准备就绪,就设为阻塞
     while(cons.r == cons.w){
       if(myproc()->killed){
         release(&cons.lock);
@@ -187,6 +187,7 @@ consoleinit(void)
 
   uartinit();
 
+  //设置键盘设备的read和write驱动函数
   // connect read and write system calls
   // to consoleread and consolewrite.
   devsw[CONSOLE].read = consoleread;

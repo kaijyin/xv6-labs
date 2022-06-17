@@ -41,12 +41,13 @@ extern struct cpu cpus[NCPU];
 // the trapframe includes callee-saved user registers like s0-s11 because the
 // return-to-user path via usertrapret() doesn't return through
 // the entire kernel call stack.
-struct trapframe {
+struct trapframe {//用户态中断
+  //0-32位这些寄存器用在中断进入内核态时需要用到的,在initpro的时候就设置好了
   /*   0 */ uint64 kernel_satp;   // kernel page table
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
-  /*  16 */ uint64 kernel_trap;   // usertrap()
-  /*  24 */ uint64 epc;           // saved user program counter
-  /*  32 */ uint64 kernel_hartid; // saved kernel tp
+  /*  16 */ uint64 kernel_trap;   // usertrap()//中断处理函数usertrap地址
+  /*  24 */ uint64 epc;           // saved user program counter //用户态最后调用时的pc,sepc
+  /*  32 */ uint64 kernel_hartid; // saved kernel tp 
   /*  40 */ uint64 ra;
   /*  48 */ uint64 sp;
   /*  56 */ uint64 gp;
@@ -98,7 +99,8 @@ struct proc {
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
-  struct trapframe *trapframe; // data page for trampoline.S
+  pagetable_t kpagetable;      // kernel page table
+  struct trapframe *trapframe; // data page for trampoline.S,指向中断时所有寄存器保存的地址,trampoline页
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory

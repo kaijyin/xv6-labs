@@ -43,7 +43,7 @@ w_mepc(uint64 x)
 #define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User
 #define SSTATUS_SPIE (1L << 5) // Supervisor Previous Interrupt Enable
 #define SSTATUS_UPIE (1L << 4) // User Previous Interrupt Enable
-#define SSTATUS_SIE (1L << 1)  // Supervisor Interrupt Enable
+#define SSTATUS_SIE (1L << 1)  // Supervisor Interrupt Enable 中断请求
 #define SSTATUS_UIE (1L << 0)  // User Interrupt Enable
 
 static inline uint64
@@ -113,7 +113,7 @@ w_mie(uint64 x)
 
 // machine exception program counter, holds the
 // instruction address to which a return from
-// exception will go.
+// exception will go.中断调用的返回地址
 static inline void 
 w_sepc(uint64 x)
 {
@@ -257,7 +257,7 @@ r_time()
   return x;
 }
 
-// enable device interrupts
+// enable device interrupts,开启SIE(内核中断)中断
 static inline void
 intr_on()
 {

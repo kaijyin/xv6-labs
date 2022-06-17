@@ -11,6 +11,8 @@
 void
 plicinit(void)
 {
+  //直接使用物理地址,不翻译
+  //XXXXX！错!已经设置了stap,必定需要页表翻译,只不过翻译的过程不可见,由于是直接映射,所以虚拟地址就是物理地址
   // set desired IRQ priorities non-zero (otherwise disabled).
   *(uint32*)(PLIC + UART0_IRQ*4) = 1;
   *(uint32*)(PLIC + VIRTIO0_IRQ*4) = 1;
@@ -21,6 +23,9 @@ plicinithart(void)
 {
   int hart = cpuid();
   
+
+  //直接使用物理地址,不进行翻译   
+  //XXXXX！错!已经设置了stap,必定需要页表翻译,只不过翻译的过程不可见,由于是直接映射,所以虚拟地址就是物理地址
   // set uart's enable bit for this hart's S-mode. 
   *(uint32*)PLIC_SENABLE(hart)= (1 << UART0_IRQ) | (1 << VIRTIO0_IRQ);
 
