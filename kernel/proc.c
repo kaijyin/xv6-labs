@@ -142,7 +142,6 @@ found:
     release(&p->lock);
     return 0;
   }
-
   // Set up new context to start executing at forkret,
   //设置return address为forkret,等到线程切换后自动设置pc为ra开始执行
   // which returns to user space.
@@ -314,6 +313,7 @@ int fork(void)
     release(&np->lock);
     return -1;
   }
+  np->stackbase = p->stackbase;
   np->sz = p->sz;
 
   kvmgrow(np->kpagetable,np->pagetable,0,np->sz);
@@ -377,9 +377,10 @@ void reparent(struct proc *p)
 // until its parent calls wait().
 void exit(int status)
 {
-  struct proc *p = myproc();
 
-  if (p == initproc)
+
+  struct proc *p = myproc();
+  if(p == initproc)
     panic("init exiting");
 
   // Close all open files.
@@ -518,11 +519,13 @@ scheduler(void)//每个核的循环函数,不停查询有没有准备好的proce
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
     
-    int found = 0;
+    int nproc = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if (p->state == RUNNABLE)
-      {
+      if(p->state != UNUSED) {
+        nproc++;
+      }
+      if(p->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
@@ -535,19 +538,13 @@ scheduler(void)//每个核的循环函数,不停查询有没有准备好的proce
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-
-        found = 1;
       }
       release(&p->lock);
     }
-#if !defined (LAB_FS)
-    if(found == 0) {
+    if(nproc <= 2) {   // only init and sh exist
       intr_on();
       asm volatile("wfi");
     }
-#else
-    ;
-#endif
   }
 }
 

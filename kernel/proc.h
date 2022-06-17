@@ -102,6 +102,7 @@ struct proc {
   int hander_working;
   struct trapframe *hander_trapframe;
 
+  uint64 stackbase;
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table

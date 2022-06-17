@@ -3,7 +3,6 @@
 # (e.g., LB=util).  Run make grade to test solution with the lab's
 # grade script (e.g., grade-lab-util).
 
-
 K=kernel
 U=user
 
@@ -38,7 +37,6 @@ OBJS = \
   $K/virtio_disk.o \
   $K/stats.o\
   $K/sprintf.o
-
 
 ifeq ($(LAB),net)
 OBJS += \
@@ -175,20 +173,14 @@ UPROGS=\
 
 UPROGS += \
 	$U/_call\
-	$U/_alarmtest
-
+	$U/_alarmtest\
+	$U/_bttest
 
 UPROGS += \
 	$U/_stats
 
-
-UPROGS += \
-	$U/_bttest
-
-ifeq ($(LAB),lazy)
 UPROGS += \
 	$U/_lazytests
-endif
 
 ifeq ($(LAB),cow)
 UPROGS += \
@@ -306,6 +298,7 @@ grade:
 	@$(MAKE) clean || \
           (echo "'make clean' failed.  HINT: Do you have another running instance of xv6?" && exit 1)
 	./grade-lab $(GRADEFLAGS)
+
 
 ##
 ## FOR web handin
