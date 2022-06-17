@@ -264,7 +264,7 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
 
 void kvmgrow(pagetable_t kpagetable ,pagetable_t pagetable,uint64 oldsz,uint64 newsz){
 
-  if(newsz >= CLINT)
+  if(newsz >= PLIC)
     panic("kvmgrow:newsz>CLINT");
   pte_t *pte,*kpte;
   uint64 i;
@@ -291,7 +291,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
   char *mem;
   uint64 a;
-  if(newsz >= CLINT){
+  if(newsz >= PLIC){
      return 0;
   }
   if(newsz < oldsz)
