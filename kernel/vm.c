@@ -300,7 +300,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     mem = kalloc();
     if(mem == 0){
       //一页分配失败,则整个操作都取消,释放之前分配的内存
-      printf("here42424244\n");
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -308,7 +307,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz);
-      printf("here22323\n");
       return 0;
     }
   }
@@ -357,7 +355,6 @@ freewalk(pagetable_t pagetable)
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
-  printf("sz %d\n",sz);
   uvmdealloc(pagetable,sz,0);//用户额外申请的空间就需要dofree
   freewalk(pagetable);
 }

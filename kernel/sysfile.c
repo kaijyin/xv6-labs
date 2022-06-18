@@ -72,17 +72,21 @@ sys_read(void)
   struct file *f;
   int n;
   uint64 va;
-
+  
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &va) < 0)
     return -1;
   struct proc*p=myproc();
-  if(p->sz>va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&walkaddr(p->pagetable,va)==0){
-    if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)==0){
-       panic("sys_read");
+ //防止va设置很大+n后为很小的地址,攻击成功
+  if(p->sz>va&&p->sz>=va+n&&(va>p->stackbase||va<=p->stackbase-PGSIZE)){
+    if(walkaddr(p->pagetable,va)==0){
+      if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDUP(va+n))==0){
+        panic("sys_write");
+      }
+      kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDUP(va+n));
     }
-    kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
+    return fileread(f, va, n);
   }
-  return fileread(f, va, n);
+  return -1;
 }
 
 uint64
@@ -95,13 +99,17 @@ sys_write(void)
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &va) < 0)
     return -1;
   struct proc*p=myproc();
-  if(p->sz>va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&walkaddr(p->pagetable,va)==0){
-    if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)==0){
-       panic("sys_write");
+ //防止va设置很大+n后为很小的地址,攻击成功
+  if(p->sz>va&&p->sz>=va+n&&(va>p->stackbase||va<=p->stackbase-PGSIZE)){
+    if(walkaddr(p->pagetable,va)==0){
+      if(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDUP(va+n))==0){
+        panic("sys_write");
+      }
+      kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDUP(va+n));
     }
-    kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
+    return filewrite(f, va, n);
   }
-  return filewrite(f, va, n);
+  return -1;
 }
 
 uint64
@@ -138,6 +146,7 @@ sys_link(void)
   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
     return -1;
 
+  printf("link\n");
   begin_op();
   if((ip = namei(old)) == 0){
     end_op();

@@ -16,3 +16,7 @@ solve:对代码分析6小时后得出结论,p->sz>va 而不是>= 麻了
 
 bug3:和bug2一样的,相关的判断都得改
 
+usertests中的copyin
+bug:直接暂停运行,可能是死锁了
+solve:发现是在测攻击,va舍得很特殊,这里是因为write/read时触发va太大,本来超过进程sz就会退出,
+但由于溢出,得到va+n的值比p->sz小,成功进入umalloc函数申请物理页map,但va太大,导致错误.
