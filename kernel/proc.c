@@ -313,7 +313,7 @@ int fork(void)
     release(&np->lock);
     return -1;
   }
-
+  
   np->stackbase = p->stackbase;
   np->sz = p->sz;
 
@@ -341,8 +341,8 @@ int fork(void)
 
   np->state = RUNNABLE;
 
+//释放proc锁,让scheduler能够调度
   release(&np->lock);
-
   return pid;
 }
 
@@ -532,7 +532,6 @@ scheduler(void)//每个核的循环函数,不停查询有没有准备好的proce
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        // vmprint(p->kpagetable);
         kvmchange(p->kpagetable);
         swtch(&c->context, &p->context);
         kvminithart();

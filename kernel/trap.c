@@ -73,7 +73,7 @@ usertrap(void)
     //为page fault定位,为va对应的页面映射物理内存.
     uint64 va=r_stval();
     if((r_scause()==13||r_scause()==15)&&va<p->sz){
-    pte_t *pte=walk(p->pagetable,va,0);
+     pte_t *pte=walk(p->pagetable,va,0);
      if(pte&&(*pte & PTE_V)&&(*pte & PTE_U)&&(*pte & PTE_COW)){
      uint flags=PTE_FLAGS(*pte);
      flags&=~PTE_COW;
@@ -82,6 +82,7 @@ usertrap(void)
      lock_kalloc();//加上全局锁,读取和更新 PTE_W和PTE_COW需要同步
         if(refnum(pa)==1){//如果该物理页只有一个引用,说明就他在使用,加上写标志即可
           *pte=PA2PTE(pa)|flags;
+          kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
           unlock_kalloc();
           goto ahead;
         }
@@ -89,6 +90,7 @@ usertrap(void)
         if((newpa=(uint64)kalloc())!=0){
           deal_refnum(pa);
           *pte=PA2PTE(newpa)|flags;
+          kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
           unlock_kalloc();
           memmove((void*)newpa,(void*)pa,PGSIZE);
           goto ahead;

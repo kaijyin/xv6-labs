@@ -269,12 +269,11 @@ void kvmgrow(pagetable_t kpagetable ,pagetable_t pagetable,uint64 oldsz,uint64 n
   uint64 i;
 
   for(i = oldsz; i < newsz; i += PGSIZE){
-    if((pte = walk(pagetable, i, 0)) == 0)continue;//用户页表没映射(lazy),跳过
-
+    if((pte = walk(pagetable, i, 0)) == 0|| (*pte & PTE_V) == 0)continue;//用户页表没映射(lazy),跳过
     if((kpte = walk(kpagetable, i, 1)) == 0)
       panic("kvmgrow: pte alloc fail");
     *kpte=*pte;
-    *kpte&=~(PTE_U|PTE_W|PTE_X);
+    *kpte&=~(PTE_U|PTE_W|PTE_X|PTE_COW);
   }
   for(i=newsz;i<oldsz;i+=PGSIZE){
     if((kpte = walk(kpagetable, i, 0)) == 0)continue;//lazy的skip
@@ -343,7 +342,7 @@ freewalk(pagetable_t pagetable)
       // this PTE points to a lower-level page table.
       uint64 child = PTE2PA(pte);
       freewalk((pagetable_t)child);
-      pagetable[i] = 0;
+      pagetable[i] = 0; 
     } else if(pte & PTE_V){
       panic("freewalk: leaf");
     }
@@ -372,8 +371,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   uint64 pa, i;
   uint flags;
   for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walk(old, i, 0)) == 0)continue;
-    if((*pte & PTE_V) == 0)continue;
+    if((pte = walk(old, i, 0)) == 0|| (*pte & PTE_V) == 0)continue;
     lock_kalloc();
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
