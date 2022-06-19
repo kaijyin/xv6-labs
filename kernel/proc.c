@@ -313,6 +313,7 @@ int fork(void)
     release(&np->lock);
     return -1;
   }
+
   np->stackbase = p->stackbase;
   np->sz = p->sz;
 

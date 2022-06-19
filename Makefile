@@ -47,6 +47,8 @@ OBJS += \
 endif
 
 
+
+
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
 #TOOLPREFIX = 
@@ -117,7 +119,9 @@ tags: $(OBJS) _init
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
+
 ULIB += $U/statistics.o
+
 
 
 _%: %.o $(ULIB)
@@ -182,10 +186,8 @@ UPROGS += \
 UPROGS += \
 	$U/_lazytests
 
-ifeq ($(LAB),cow)
 UPROGS += \
 	$U/_cowtest
-endif
 
 ifeq ($(LAB),thread)
 UPROGS += \
@@ -216,13 +218,13 @@ UPROGS += \
 endif
 
 
-
 ifeq ($(LAB),net)
 UPROGS += \
 	$U/_nettests
 endif
 
 UEXTRA= user/xargstest.sh
+
 
 fs.img: mkfs/mkfs README $(UEXTRA) $(UPROGS)
 	mkfs/mkfs fs.img README $(UEXTRA) $(UPROGS)
@@ -298,7 +300,6 @@ grade:
 	@$(MAKE) clean || \
           (echo "'make clean' failed.  HINT: Do you have another running instance of xv6?" && exit 1)
 	./grade-lab $(GRADEFLAGS)
-
 
 ##
 ## FOR web handin

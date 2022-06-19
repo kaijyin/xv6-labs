@@ -71,20 +71,40 @@ usertrap(void)
     // ok
   }else {
     //为page fault定位,为va对应的页面映射物理内存.
-    if(r_scause() == 13||r_scause()==15){
-        uint64 va=r_stval();
-        if(p->sz>va&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)!=0)){
-           kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
-           goto ahead;
+    uint64 va=r_stval();
+    if((r_scause()==13||r_scause()==15)&&va<p->sz){
+    pte_t *pte=walk(p->pagetable,va,0);
+     if(pte&&(*pte & PTE_V)&&(*pte & PTE_U)&&(*pte & PTE_COW)){
+     uint flags=PTE_FLAGS(*pte);
+     flags&=~PTE_COW;
+     flags|=PTE_W;
+     uint64 pa=PTE2PA(*pte);
+     lock_kalloc();//加上全局锁,读取和更新 PTE_W和PTE_COW需要同步
+        if(refnum(pa)==1){//如果该物理页只有一个引用,说明就他在使用,加上写标志即可
+          *pte=PA2PTE(pa)|flags;
+          unlock_kalloc();
+          goto ahead;
         }
-    }
+        uint64 newpa;
+        if((newpa=(uint64)kalloc())!=0){
+          deal_refnum(pa);
+          *pte=PA2PTE(newpa)|flags;
+          unlock_kalloc();
+          memmove((void*)newpa,(void*)pa,PGSIZE);
+          goto ahead;
+        }
+     unlock_kalloc();
+    }else if((pte == 0||(*pte & PTE_V) == 0)&&(va>p->stackbase||va<=p->stackbase-PGSIZE)&&(uvmalloc(p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE)!=0)){
+        kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
+        goto ahead;
+    }}
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
 
 ahead:
-  
+
   if(p->killed)
     exit(-1);
 
