@@ -82,7 +82,6 @@ usertrap(void)
      lock_kalloc();//加上全局锁,读取和更新 PTE_W和PTE_COW需要同步
         if(refnum(pa)==1){//如果该物理页只有一个引用,说明就他在使用,加上写标志即可
           *pte=PA2PTE(pa)|flags;
-          kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
           unlock_kalloc();
           goto ahead;
         }
@@ -90,6 +89,7 @@ usertrap(void)
         if((newpa=(uint64)kalloc())!=0){
           deal_refnum(pa);
           *pte=PA2PTE(newpa)|flags;
+          //修改kernel对应页表
           kvmgrow(p->kpagetable,p->pagetable,PGROUNDDOWN(va),PGROUNDDOWN(va)+PGSIZE);
           unlock_kalloc();
           memmove((void*)newpa,(void*)pa,PGSIZE);
